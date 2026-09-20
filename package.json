@@ -1,0 +1,16 @@
+{
+  "name": "paciencia-spider",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Paciencia Spider offline para celular Android, adaptado para pessoa idosa",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && node tools/gen-sw.mjs",
+    "preview": "vite preview",
+    "test": "node tools/test-core.mjs"
+  },
+  "devDependencies": {
+    "vite": "^8.3.0"
+  }
+}

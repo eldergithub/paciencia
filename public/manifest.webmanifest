@@ -1,0 +1,25 @@
+{
+  "name": "Paciência Spider",
+  "short_name": "Spider",
+  "description": "Paciência Spider offline sob medida, com partidas garantidamente vencíveis.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "landscape",
+  "theme_color": "#256045",
+  "background_color": "#1a4531",
+  "icons": [
+    {
+      "src": "./icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

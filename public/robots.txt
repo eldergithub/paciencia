@@ -1,0 +1,5 @@
+# O endereco do jogo e para ser dado de mao em mao, nao encontrado em busca.
+# Nao ha nada sigiloso aqui - so nao ha motivo para um jogo particular
+# aparecer em resultado de pesquisa.
+User-agent: *
+Disallow: /

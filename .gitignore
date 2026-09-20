@@ -1,0 +1,8 @@
+node_modules/
+dist/
+
+# Documentos de trabalho: ficam na maquina, nao no repositorio publico.
+# O PLANO.md descreve o perfil de uma pessoa real; o PUBLICACAO.md e o
+# passo a passo de instalacao, de uso pessoal.
+PLANO.md
+PUBLICACAO.md

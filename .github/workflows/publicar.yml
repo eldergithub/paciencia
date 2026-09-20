@@ -1,0 +1,60 @@
+# Publica o jogo no GitHub Pages a cada envio para o branch principal.
+#
+# O fluxo e: você faz `git push`, o GitHub roda `npm run build` numa máquina
+# dele e publica a pasta `dist/` resultante. Você nunca precisa enviar a
+# `dist` para o repositório — por isso ela está no `.gitignore`.
+#
+# `npm test` roda antes do build de propósito: se alguma das 203 verificações
+# quebrar, a publicação não acontece e ela continua com a versão boa no
+# celular.
+
+name: Publicar no GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  # Permite publicar na mão pela aba "Actions" do repositório.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Se dois envios acontecerem juntos, o último vence; nenhum fica pela metade.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  construir:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Conferir as regras do jogo
+        run: npm test
+
+      - name: Montar o pacote
+        run: npm run build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  publicar:
+    needs: construir
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.publicacao.outputs.page_url }}
+    steps:
+      - id: publicacao
+        uses: actions/deploy-pages@v4

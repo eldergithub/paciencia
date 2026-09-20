@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="feltro" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#2f6e4e"/>
+      <stop offset="65%" stop-color="#256045"/>
+      <stop offset="100%" stop-color="#1a4531"/>
+    </radialGradient>
+    <filter id="sombra" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="16" stdDeviation="16" flood-color="#000" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <!-- Fundo Feltro -->
+  <rect width="512" height="512" rx="104" fill="url(#feltro)"/>
+  <rect width="500" height="500" x="6" y="6" rx="98" fill="none" stroke="#ffd23f" stroke-width="4" stroke-opacity="0.4"/>
+
+  <!-- Carta Branca com Sombra -->
+  <g filter="url(#sombra)">
+    <rect x="120" y="80" width="272" height="352" rx="20" fill="#fdfcf7" stroke="#c9c4b8" stroke-width="3"/>
+  </g>
+
+  <!-- Borda interna dourada sutil na carta -->
+  <rect x="132" y="92" width="248" height="328" rx="14" fill="none" stroke="#ddd8cc" stroke-width="2"/>
+
+  <!-- Índice: Letra 'A' no topo esquerdo -->
+  <text x="146" y="146" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="52" fill="#16181c">A</text>
+  <!-- Pequena espada sob o 'A' -->
+  <path d="M160 162 C154 168 147 174 147 180 C147 185 151 188 156 188 C158 188 160 187 160 187 C160 187 162 188 164 188 C169 188 173 185 173 180 C173 174 166 168 160 162 Z M158 187 L157 194 L163 194 L162 187 Z" fill="#1a2a4a"/>
+
+  <!-- Grande Ás de Espadas no centro -->
+  <g transform="translate(256, 250) scale(4.6)">
+    <!-- Formato da Espada -->
+    <path d="M0 -21 C-8 -9 -19 0 -19 10 C-19 18 -12 23 -4 23 C-1 23 0 21 0 21 C0 21 1 23 4 23 C12 23 19 18 19 10 C19 0 8 -9 0 -21 Z" fill="#1a2a4a"/>
+    <!-- Tronco/Pedestal da Espada -->
+    <path d="M-3 20 L-6 32 L6 32 L3 20 Z" fill="#1a2a4a"/>
+  </g>
+
+  <!-- Índice invertido no canto inferior direito -->
+  <g transform="rotate(180 342 390)">
+    <text x="328" y="406" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="52" fill="#16181c">A</text>
+  </g>
+</svg>

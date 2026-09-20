@@ -1,0 +1,737 @@
+/* ==========================================================================
+   Paciencia Spider
+   Cores tiradas das referencias de Spider fornecidas, para o jogo ser
+   reconhecido de imediato por quem jogou a vida toda.
+   ========================================================================== */
+
+:root {
+  /* Mesa: verde com vinheta, centro mais claro que as bordas. */
+  --feltro-centro: #2f6e4e;
+  --feltro-meio: #256045;
+  --feltro-borda: #1a4531;
+
+  /* Cartas */
+  --carta-fundo: #fdfcf7;
+  --carta-borda: #c9c4b8;
+  --carta-divisor: #ddd8cc;
+  --tinta-valor: #16181c;
+  --tinta-preta: #1a2a4a;   /* espadas em azul-marinho, nao preto puro */
+  --tinta-vermelha: #b3121b;
+
+  /* Fora da sequencia montada: o PAPEL escurece, a tinta nunca.
+     #16181c sobre #c9c5bb da contraste de ~11:1, bem acima do minimo de
+     4,5:1 - nada fica mais dificil de ler, so o fundo passa a informar. */
+  --carta-fora-fundo: #c9c5bb;
+  --carta-fora-borda: #a9a49a;
+  --carta-fora-divisor: #b3aea3;
+
+  /* Verso vermelho: contrasta fortissimo com a frente quase branca, entao ela
+     distingue num relance o que esta virado para baixo. */
+  --verso-vermelho: #b03434;
+  --verso-vermelho-escuro: #8f2626;
+  --verso-borda: #f0e9e4;
+
+  /* Controles */
+  --disco-fundo: #14181a;
+  --disco-borda: rgba(255, 255, 255, .18);
+  --disco-sair: #3a2422;
+  --coluna-vazia-fundo: rgba(0, 0, 0, .16);
+  --coluna-vazia-borda: rgba(255, 255, 255, .22);
+
+  /* Destaques */
+  --destaque: #ffd23f;
+  --icone-dica: #ffd23f;
+  --icone-voltar: #ff8a7a;
+
+  /* Nenhum alvo tocavel fica abaixo disto: mao tremula. */
+  --alvo-minimo: 88px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  /* Nada de selecionar texto sem querer ao segurar o dedo na tela. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  /* Impede "puxar para recarregar" e o efeito de borracha nas bordas: os
+     dois fazem a tela pular durante o arrasto de uma carta. */
+  overscroll-behavior: none;
+  touch-action: none;
+  background: var(--feltro-borda);
+  color: #fff;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 18px;
+  -webkit-text-size-adjust: 100%;
+}
+
+#app {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  /* Respeita o entalhe e a barra de gestos do Android, com um minimo de 16px
+     de cada lado: encostar botao na borda faz o deslize virar "voltar" do
+     sistema e o jogo some da tela. */
+  padding-top: max(env(safe-area-inset-top), 8px);
+  padding-bottom: max(env(safe-area-inset-bottom), 8px);
+  padding-left: max(env(safe-area-inset-left), 16px);
+  padding-right: max(env(safe-area-inset-right), 16px);
+  background: radial-gradient(ellipse 70% 85% at 52% 42%,
+    var(--feltro-centro) 0%, var(--feltro-meio) 45%, var(--feltro-borda) 100%);
+}
+
+.mesa {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.tabuleiro {
+  position: absolute;
+  inset: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Cartas
+   -------------------------------------------------------------------------- */
+
+.carta {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 6px;
+  border: 1px solid var(--carta-borda);
+  background: var(--carta-fundo);
+  box-shadow: 0 2px 3px rgba(0, 0, 0, .4);
+  overflow: hidden;
+  will-change: transform;
+}
+
+.carta[hidden] { display: none; }
+
+/* Embaralhada: fora da sequencia ja montada. */
+.carta.fora {
+  background: var(--carta-fora-fundo);
+  border-color: var(--carta-fora-borda);
+}
+.carta.fora .faixa { border-bottom-color: var(--carta-fora-divisor); }
+
+.carta.verso {
+  background: repeating-linear-gradient(135deg,
+    var(--verso-vermelho) 0 3px, var(--verso-vermelho-escuro) 3px 6px);
+  border-color: var(--verso-borda);
+}
+.carta.verso .faixa,
+.carta.verso .pip { display: none; }
+
+/* O indice fica na horizontal porque o que aparece de uma carta sobreposta e
+   uma faixa horizontal: valor a esquerda, naipe a direita, tudo visivel numa
+   tira fina. */
+.faixa {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 7%;
+  border-bottom: 1px solid var(--carta-divisor);
+}
+
+.valor {
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -1px;
+  color: var(--tinta-valor);
+}
+
+.naipe {
+  line-height: 1;
+  color: var(--tinta-preta);
+}
+
+.pip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  color: var(--tinta-preta);
+}
+.pip[hidden] { display: none; }
+
+.carta.vermelha .naipe,
+.carta.vermelha .pip { color: var(--tinta-vermelha); }
+
+/* Coluna vazia ganha marca propria, para ela perceber que ali cabe carta e
+   nao e um buraco. */
+.coluna-vazia {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 7px;
+  border: 2px solid var(--coluna-vazia-borda);
+  background: var(--coluna-vazia-fundo);
+}
+.coluna-vazia[hidden] { display: none; }
+
+/* --------------------------------------------------------------------------
+   Trilho de controles, a esquerda
+   -------------------------------------------------------------------------- */
+
+.trilho {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 104px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--trilho-gap, 6px);
+  z-index: 200;
+}
+
+/* Progresso: 8 pininhos que acendem, em vez do texto "3 de 8". */
+.prontas {
+  display: flex;
+  gap: 4px;
+  height: var(--pino-altura, 18px);
+  align-items: center;
+  /* Sem isto o flex espreme os pininhos e o monte para caber tudo. */
+  flex-shrink: 0;
+}
+
+.pino {
+  width: 10px;
+  height: 100%;
+  border-radius: 2px;
+  border: 1px solid rgba(0, 0, 0, .45);
+  background: rgba(0, 0, 0, .3);
+}
+.pino.cheio {
+  background: var(--destaque);
+  border-color: #8a6b00;
+}
+
+.acoes {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  min-height: 0;
+}
+
+/* Icone sozinho obriga a decifrar; palavra sozinha obriga a ler. Os dois
+   juntos sao reconhecidos bem mais rapido. */
+/* Cada botao ocupa um terco da altura do trilho e a largura inteira dele:
+   a area tocavel fica em torno de 72 x 104 px, bem acima dos 48 px que as
+   diretrizes de toque pedem, mesmo o disco visivel tendo 50 px. Os 88 px de
+   altura do plano original nao cabem junto com o monte no trilho, e area
+   tocavel grande vale mais que disco grande. */
+/* min-height e o que impede o transbordo: o botao nunca encolhe abaixo da
+   altura que a conta reservou para ele, entao nada vaza por cima do vizinho.
+   flex-grow deixa o botao crescer quando a tela e alta, aumentando a area
+   tocavel de graca. */
+.acoes .acao {
+  flex: 1 1 auto;
+  min-height: var(--acao-altura, 68px);
+}
+
+.acao {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 0;
+  background: none;
+  border: 0;
+  font: inherit;
+  color: #fff;
+}
+
+.disco {
+  width: var(--disco, 50px);
+  height: var(--disco, 50px);
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--disco-fundo);
+  border: 2px solid var(--disco-borda);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, .45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icone {
+  width: var(--icone, 28px);
+  height: var(--icone, 28px);
+  color: #fff;
+}
+
+.rotulo {
+  font-size: var(--rotulo-fonte, 12px);
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: .2px;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .6);
+}
+
+.acao.voltar .icone { color: var(--icone-voltar); }
+.acao.dica .icone { color: var(--icone-dica); }
+
+.acao:disabled { opacity: .35; }
+
+/* SAIR fica menor, apagado e isolado no pe do trilho, para nao competir com
+   os botoes de jogo - mas visivel, para ela nunca se sentir presa. */
+.acao.sair .disco {
+  width: var(--disco-sair-tamanho, 34px);
+  height: var(--disco-sair-tamanho, 34px);
+  background: var(--disco-sair);
+}
+.acao.sair .icone { width: var(--icone-sair, 19px); height: var(--icone-sair, 19px); }
+.acao.sair .rotulo { font-size: var(--rotulo-sair-fonte, 11px); color: #e8d9d6; }
+
+/* Monte: uma folha por distribuicao restante. Ela ve o bolo diminuir de 5
+   para 1 sem ler contagem nenhuma. */
+.monte {
+  position: relative;
+  width: var(--monte-largura, 88px);
+  height: var(--monte-altura, 74px);
+  background: none;
+  border: 0;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.folha {
+  position: absolute;
+  left: 0;
+  width: var(--monte-largura, 88px);
+  height: var(--folha-altura, 58px);
+  border-radius: 5px;
+  border: 1px solid var(--verso-borda);
+  background: repeating-linear-gradient(135deg,
+    var(--verso-vermelho) 0 3px, var(--verso-vermelho-escuro) 3px 6px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.aranha {
+  width: min(34px, calc(var(--folha-altura, 58px) * 0.6));
+  height: min(34px, calc(var(--folha-altura, 58px) * 0.6));
+}
+
+.monte.vazio { opacity: .3; }
+
+.rodape {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  width: 100%;
+  gap: 4px;
+  flex-shrink: 0;
+  min-height: var(--rodape-altura, 50px);
+}
+
+/* Engrenagem minuscula e apagada, no canto oposto aos botoes de jogo, para
+   ela nao esbarrar sem querer. */
+.ajustes {
+  padding: 6px;
+  background: none;
+  border: 0;
+  color: #fff;
+  opacity: .5;
+}
+.ajustes .icone { width: 22px; height: 22px; }
+
+/* --------------------------------------------------------------------------
+   Interacao: arrastar, soltar e tocar para mover
+   -------------------------------------------------------------------------- */
+
+/* A carta anima ate o destino em vez de teleportar: ela ve para onde foi.
+   Vale tanto para o arrasto quanto para o toque. */
+.carta {
+  transition: transform .18s ease-out;
+}
+
+/* Carta recem-criada nao anima: numa partida nova as 54 sairiam voando. */
+.carta.novo { transition: none; }
+
+/* Durante o arrasto a carta acompanha o dedo sem atraso nenhum. */
+.carta.arrastando {
+  transition: none;
+  box-shadow: 0 8px 14px rgba(0, 0, 0, .5);
+  cursor: grabbing;
+}
+
+/* Coluna que aceita a carta durante o arrasto. Contorno grosso e amarelo,
+   por fora da carta, para aparecer mesmo com o dedo em cima. */
+.carta.alvo,
+.coluna-vazia.alvo {
+  outline: 4px solid var(--destaque);
+  outline-offset: 1px;
+}
+
+/* Ela tocou numa carta soterrada, que nao tem como mover: o bloco que PODE
+   mover naquela coluna pisca. Nada sai do lugar, e ela aprende olhando. */
+.carta.pode-mover {
+  animation: pulsar .5s ease-in-out 1;
+  outline: 3px solid var(--destaque);
+  outline-offset: 1px;
+}
+
+@keyframes pulsar {
+  0%, 100% { outline-color: var(--destaque); }
+  50% { outline-color: rgba(255, 210, 63, .15); }
+}
+
+/* Nao ha destino nenhum para esta carta. Um balanco curto, sem vermelho, sem
+   aviso e sem som: a mensagem e "essa nao tem para onde ir agora". */
+.carta.recusada {
+  animation: balanco .3s ease-in-out 1;
+}
+
+@keyframes balanco {
+  0%, 100% { margin-left: 0; }
+  25% { margin-left: -5px; }
+  75% { margin-left: 5px; }
+}
+
+/* Quem prefere menos movimento na tela nao perde nada de informacao. */
+@media (prefers-reduced-motion: reduce) {
+  .carta { transition: none; }
+  .carta.recusada, .carta.pode-mover { animation: none; }
+}
+
+/* --------------------------------------------------------------------------
+   Dica, colunas vazias pulsando e monte em destaque
+   -------------------------------------------------------------------------- */
+
+/* A dica mostra em vez de descrever: acende a carta que sai e a coluna que
+   recebe, e deixa ela fazer o movimento. */
+.carta.dica-origem,
+.carta.dica-destino,
+.coluna-vazia.dica-destino {
+  outline: 4px solid var(--destaque);
+  outline-offset: 1px;
+  animation: acender 1s ease-in-out infinite;
+}
+
+.coluna-vazia.pulsando {
+  animation: pulsar-vazia 1s ease-in-out infinite;
+}
+
+.monte.piscando { animation: acender 1s ease-in-out infinite; }
+
+@keyframes acender {
+  0%, 100% { outline-color: var(--destaque); }
+  50% { outline-color: rgba(255, 210, 63, .2); }
+}
+
+@keyframes pulsar-vazia {
+  0%, 100% {
+    border-color: var(--destaque);
+    background: rgba(255, 210, 63, .22);
+  }
+  50% {
+    border-color: rgba(255, 210, 63, .3);
+    background: rgba(0, 0, 0, .16);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Perguntas de duas saidas, ajustes e tela de "como sair"
+   -------------------------------------------------------------------------- */
+
+.camada {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(env(safe-area-inset-top), 10px) max(env(safe-area-inset-right), 18px)
+           max(env(safe-area-inset-bottom), 10px) max(env(safe-area-inset-left), 18px);
+  background: rgba(0, 0, 0, .66);
+}
+
+.caixa {
+  width: 100%;
+  max-width: 620px;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 16px;
+  background: #f4f1e8;
+  border: 3px solid #23211f;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .5);
+  overflow: auto;
+}
+
+.pergunta {
+  font-size: 23px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #16181c;
+  text-align: center;
+}
+
+.detalhe {
+  font-size: 16px;
+  color: #4a4a4a;
+  text-align: center;
+  margin-top: -6px;
+}
+
+.escolhas {
+  display: flex;
+  gap: 12px;
+}
+
+/* Nada de "OK" e "Cancelar": as duas saidas dizem por extenso o que fazem,
+   para ela nao precisar reler a pergunta para saber o que esta respondendo. */
+.botao-grande,
+.opcao {
+  flex: 1;
+  min-height: 84px;
+  padding: 10px 14px;
+  font: inherit;
+  font-size: 19px;
+  font-weight: 800;
+  line-height: 1.15;
+  color: #16181c;
+  background: #fff;
+  border: 3px solid #23211f;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+/* A resposta que nao perde nada vem primeiro e fica destacada: um toque
+   apressado cai no lado seguro. */
+.botao-grande.seguro,
+.opcao.marcada {
+  background: #1f6b46;
+  color: #fff;
+  border-color: #0d3a26;
+}
+
+.botao-grande.largo { flex: none; }
+
+.opcao-titulo { font-size: 21px; font-weight: 800; }
+.opcao-detalhe { font-size: 14px; font-weight: 600; opacity: .8; }
+
+.caixa.saida { align-items: center; }
+.desenho svg { width: 150px; height: 120px; }
+
+/* --------------------------------------------------------------------------
+   Estatística no painel de Ajustes
+   -------------------------------------------------------------------------- */
+
+.ajustes-estatistica {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1f6b46;
+  background: #e2f0e7;
+  border: 2px solid #b8ddc6;
+  border-radius: 10px;
+  padding: 10px 14px;
+  text-align: center;
+}
+
+/* --------------------------------------------------------------------------
+   Comemoração de Vitória (Fase 6)
+   -------------------------------------------------------------------------- */
+
+.vitoria-camada {
+  overflow: hidden;
+  background: rgba(0, 0, 0, .75);
+}
+
+.vitoria-caixa {
+  align-items: center;
+  text-align: center;
+  max-width: 500px;
+  padding: 24px;
+  gap: 12px;
+  border: 4px solid #ffd23f;
+  animation: surgimento .3s ease-out;
+  /* Os confetes sao posicionados, a caixa nao era: o navegador pintava os
+     confetes por cima do texto, e "Voce venceu a partida!" ficava piscando
+     atras de papel colorido em movimento - exatamente o que vista cansada
+     nao consegue ler. A caixa sobe uma camada e a festa fica atras dela. */
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes surgimento {
+  0% { transform: scale(.85); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.vitoria-trofeu svg {
+  width: 90px;
+  height: 90px;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, .25));
+}
+
+.vitoria-titulo {
+  font-size: 32px;
+  font-weight: 900;
+  color: #16181c;
+  line-height: 1;
+}
+
+.vitoria-subtitulo {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1f6b46;
+}
+
+.vitoria-badge {
+  font-size: 17px;
+  font-weight: 800;
+  color: #6a4f00;
+  background: #fff6d6;
+  border: 2px solid #ffd23f;
+  border-radius: 999px;
+  padding: 8px 18px;
+}
+
+.vitoria-botao {
+  font-size: 22px;
+  min-height: 84px;
+  width: 100%;
+  /* A caixa e uma coluna flexivel: sem isto o botao e o primeiro a ser
+     espremido quando a tela e baixa, e e justamente o unico que ela toca. */
+  flex-shrink: 0;
+}
+
+/*
+ * Telas baixas: em paisagem, um 6,5" util tem entre 320 e 400 px de altura,
+ * e num aparelho com barra de gestos larga sobra ainda menos. Com os
+ * tamanhos cheios a comemoracao passava de 370 px e nascia com a taca
+ * cortada e o botao colado na borda de baixo.
+ *
+ * A caixa rola, mas rolar nao e opcao aqui: se ela nao vir o botao inteiro,
+ * acha que o jogo travou. Entao o que encolhe e a decoracao - taca, titulo,
+ * selo - e o botao continua do tamanho que era, porque e nele que ela toca.
+ */
+@media (max-height: 440px) {
+  .vitoria-caixa { padding: 14px 24px; gap: 8px; }
+  .vitoria-trofeu svg { width: 62px; height: 62px; }
+  .vitoria-titulo { font-size: 26px; }
+  .vitoria-subtitulo { font-size: 17px; }
+  .vitoria-badge { font-size: 15px; padding: 6px 14px; }
+}
+
+/* Partículas comemorativas caindo suavemente */
+.vitoria-particulas {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.particula {
+  position: absolute;
+  top: -20px;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  opacity: .9;
+  animation: cair 3s linear infinite;
+}
+
+.particula-0 { background: #ffd23f; width: 16px; height: 16px; }
+.particula-1 { background: #1f6b46; border-radius: 50%; }
+.particula-2 { background: #b03434; }
+.particula-3 { background: #fdfcf7; border: 1px solid #ccc; }
+.particula-4 { background: #ff8a7a; width: 12px; height: 18px; }
+.particula-5 { background: #ffd23f; border-radius: 50%; width: 10px; height: 10px; }
+
+@keyframes cair {
+  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  85% { opacity: 1; }
+  100% { transform: translateY(105vh) rotate(540deg); opacity: 0; }
+}
+
+/* --------------------------------------------------------------------------
+   Aviso de Orientação (Gire o celular) (Fase 7)
+   -------------------------------------------------------------------------- */
+
+#orientacao-aviso {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: var(--feltro-borda);
+  color: #fff;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 24px;
+  text-align: center;
+}
+
+/* Em orientação retrato ou tela em pé, cobre tudo com o aviso visual */
+@media (orientation: portrait), (max-aspect-ratio: 1/1) {
+  #orientacao-aviso {
+    display: flex;
+  }
+}
+
+.orientacao-ilustracao {
+  width: 140px;
+  height: 140px;
+}
+
+.celular-girando {
+  transform-origin: 80px 80px;
+  animation: girar-celular 2.2s ease-in-out infinite;
+}
+
+@keyframes girar-celular {
+  0%, 20% { transform: rotate(0deg); }
+  60%, 85% { transform: rotate(-90deg); }
+  100% { transform: rotate(0deg); }
+}
+
+.orientacao-texto {
+  font-size: 24px;
+  font-weight: 800;
+  color: #fdfcf7;
+  max-width: 320px;
+  line-height: 1.3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .carta.dica-origem, .carta.dica-destino,
+  .coluna-vazia.dica-destino, .coluna-vazia.pulsando, .monte.piscando,
+  .particula, .vitoria-caixa {
+    animation: none;
+  }
+}
+
