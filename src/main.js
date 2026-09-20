@@ -11,7 +11,7 @@ import { melhorJogada } from './core/hint.js';
 import * as R from './core/rules.js';
 import { criarTabuleiro } from './ui/render.js';
 import { ligarInteracao } from './ui/drag.js';
-import { perguntar, tentarSair } from './ui/dialogo.js';
+import { perguntar, sair } from './ui/dialogo.js';
 import { abrirAjustes } from './ui/settings.js';
 import {
   salvarPartida, carregarPartida, limparPartida,
@@ -89,8 +89,7 @@ function tratarVitoria() {
 /**
  * Trava contra pergunta em cima de pergunta.
  *
- * A confirmação de saída tem duas portas: o botão SAIR e o "voltar" do
- * Android. Com a mão trêmula, um toque vira dois, e sem esta trava a mesma
+ * Com a mão trêmula, um toque no SAIR vira dois, e sem esta trava a mesma
  * pergunta se empilhava em duas ou três camadas - ela respondia "não",
  * a pergunta continuava na tela, e a sensação era de jogo travado.
  */
@@ -110,7 +109,7 @@ async function confirmarSaida() {
   } finally {
     perguntandoSaida = false;
   }
-  if (confirmado) tentarSair();
+  if (confirmado) sair();
 }
 
 const tabuleiro = criarTabuleiro(raiz, {
@@ -210,18 +209,21 @@ ligarInteracao({
 
 tabuleiro.desenhar(estado);
 
-/**
- * O botão "voltar" do Android não fecha o jogo direto.
+/*
+ * Por que o jogo não mexe no histórico do navegador.
  *
- * Um estado empurrado no histórico faz o "voltar" virar um `popstate` em vez
- * de fechar o aplicativo. Ele abre a mesma confirmação do botão SAIR — então
- * ela não cai fora do jogo sem querer, e também nunca fica presa.
+ * Havia aqui um estado empurrado com `history.pushState` para o "voltar" do
+ * Android abrir a confirmação de saída em vez de fechar. O preço era alto e
+ * escondido: com histórico de mais de uma página, o Chrome recusa
+ * `window.close()` — ou seja, o "Sim, sair" nunca conseguia fechar de fato, e
+ * ela acabava numa tela ensinando o gesto de deslizar para cima, que é
+ * exatamente onde ela ficava presa.
+ *
+ * Sem estado nenhum no histórico, os dois caminhos funcionam sozinhos: o
+ * botão SAIR pergunta e fecha na hora, e o "voltar" do Android fecha o
+ * aplicativo como faz em qualquer outro. Sair não custa nada, porque a
+ * partida é salva a cada jogada e volta no lugar em que parou.
  */
-history.pushState({ jogo: true }, '');
-addEventListener('popstate', () => {
-  history.pushState({ jogo: true }, '');
-  confirmarSaida();
-});
 
 // A tela pode mudar de tamanho ao girar, ao aparecer a barra de gestos ou ao
 // entrar em tela cheia; as medidas são recalculadas a cada desenho.

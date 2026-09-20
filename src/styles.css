@@ -453,7 +453,7 @@ html, body {
 }
 
 /* --------------------------------------------------------------------------
-   Perguntas de duas saidas, ajustes e tela de "como sair"
+   Perguntas de duas saidas e ajustes
    -------------------------------------------------------------------------- */
 
 .camada {
@@ -538,9 +538,6 @@ html, body {
 
 .opcao-titulo { font-size: 21px; font-weight: 800; }
 .opcao-detalhe { font-size: 14px; font-weight: 600; opacity: .8; }
-
-.caixa.saida { align-items: center; }
-.desenho svg { width: 150px; height: 120px; }
 
 /* --------------------------------------------------------------------------
    Estatística no painel de Ajustes
