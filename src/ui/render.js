@@ -39,6 +39,22 @@ function icone(nome, classe) {
     ICONES[nome] + '</svg>';
 }
 
+/**
+ * Distribuicao do monte, carta por carta.
+ *
+ * `MS_VIAGEM` e quanto cada carta leva do monte ate a coluna; `MS_ENTRE` e o
+ * intervalo entre uma e a seguinte. Com 10 colunas, o total fica em torno de
+ * 0,7 s - tempo de ela acompanhar o percurso de cada uma sem ficar esperando
+ * depois de tocar.
+ */
+const MS_VIAGEM = 260;
+const MS_ENTRE = 45;
+
+/** Quem pediu menos movimento no sistema recebe as cartas ja no lugar. */
+const menosMovimento = typeof matchMedia === 'function'
+  ? matchMedia('(prefers-reduced-motion: reduce)')
+  : { matches: false };
+
 function elemento(tag, classe, pai) {
   const el = document.createElement(tag);
   if (classe) el.className = classe;
@@ -154,6 +170,20 @@ export function criarTabuleiro(raiz, aoTocar = {}) {
     v.setProperty('--rodape-altura', t.alturaRodape + 'px');
   }
 
+  /**
+   * Canto superior esquerdo do monte, nas mesmas coordenadas em que as cartas
+   * sao posicionadas.
+   *
+   * O monte mora no trilho e as cartas no tabuleiro, que sao irmaos na tela.
+   * Medir os dois e subtrair e o que traduz um para o outro - e precisa ser
+   * medido na hora, porque o trilho encolhe conforme a altura do aparelho.
+   */
+  function origemDoMonte() {
+    const dm = monte.getBoundingClientRect();
+    const dt = tabuleiro.getBoundingClientRect();
+    return { x: dm.left - dt.left, y: dm.top - dt.top };
+  }
+
   function medir() {
     // A mesa é a área útil depois de descontado o entalhe e a margem de
     // segurança contra os gestos do Android, que ficam no padding de #app.
@@ -182,9 +212,22 @@ export function criarTabuleiro(raiz, aoTocar = {}) {
     }
   }
 
-  function desenhar(estado) {
+  /**
+   * `opcoes.repartidas` e o conjunto de ids das cartas que acabaram de sair
+   * do monte. Elas nascem em cima do monte e viajam ate a coluna, uma depois
+   * da outra, em vez de simplesmente aparecerem no lugar.
+   */
+  function desenhar(estado, opcoes = {}) {
     const m = medir();
     const vivos = new Set();
+
+    // So vale a pena medir o monte se houver carta para sair dele.
+    const repartidas =
+      opcoes.repartidas && opcoes.repartidas.size > 0 && !menosMovimento.matches
+        ? opcoes.repartidas
+        : null;
+    const origem = repartidas ? origemDoMonte() : null;
+    const voando = [];
 
     for (let c = 0; c < R.COLUNAS; c++) {
       const coluna = estado.mesa[c];
@@ -210,15 +253,43 @@ export function criarTabuleiro(raiz, aoTocar = {}) {
 
         el.style.width = m.w + 'px';
         el.style.height = m.h + 'px';
-        el.style.transform = 'translate(' + x + 'px, ' + ys[i] + 'px)';
-        el.style.zIndex = String(i + 1);
+        el.hidden = false;
+
+        const lugar = 'translate(' + x + 'px, ' + ys[i] + 'px)';
+        if (repartidas && repartidas.has(carta.id)) {
+          // Nasce em cima do monte, sem transicao, e so parte no quadro
+          // seguinte. A ordem de saida e a ordem das colunas, que e
+          // exatamente a ordem em que a regra distribuiu.
+          el.classList.add('repartindo');
+          el.style.transform = 'translate(' + origem.x + 'px, ' + origem.y + 'px)';
+          // Durante o voo a carta passa por cima de tudo, senao ela some
+          // atras das colunas no meio do caminho.
+          el.style.zIndex = String(900 + c);
+          voando.push({ el, lugar, zFinal: String(i + 1), ordem: c });
+        } else {
+          // Limpeza defensiva de um voo que ficou pela metade.
+          //
+          // Duas coisas ficam grudadas na carta enquanto ela viaja do monte:
+          // a transicao com atraso, e a classe `repartindo`. Se a tela for
+          // redesenhada no meio do percurso - e ela e, a cada jogada e a cada
+          // giro de tela - as duas precisam sair aqui.
+          //
+          // O atraso esquecido faria a proxima jogada dessa carta responder
+          // com ate 0,4 s de espera. A classe esquecida e pior: ela zera a
+          // transicao, e a carta passaria a teleportar em vez de deslizar,
+          // para sempre. As duas coisas doem exatamente no que este jogo
+          // promete - que nenhum toque dela fique sem resposta visivel.
+          if (el.style.transition) el.style.transition = '';
+          el.classList.remove('repartindo');
+          el.style.transform = lugar;
+          el.style.zIndex = String(i + 1);
+        }
         // O arrasto precisa saber de onde a carta partiu para o movimento
         // ser relativo e ela nao pular ao ser pega.
         el.dataset.x = String(x);
         el.dataset.y = String(ys[i]);
         el.dataset.coluna = String(c);
         el.dataset.indice = String(i);
-        el.hidden = false;
 
         const naSequencia = inicioDoBloco >= 0 && i >= inicioDoBloco;
         el.classList.toggle('verso', !carta.up);
@@ -258,6 +329,13 @@ export function criarTabuleiro(raiz, aoTocar = {}) {
       el.hidden = true;
       delete el.dataset.coluna;
       delete el.dataset.indice;
+      // Uma carta pode sair da mesa no meio do voo do monte - e o que
+      // acontece quando ela desfaz a distribuicao logo depois de fazer, ou
+      // quando a distribuicao fecha uma sequencia. Os restos do voo saem
+      // junto: senao a carta volta do monte, mais tarde, sem saber deslizar.
+      el.classList.remove('repartindo');
+      if (el.style.transition) el.style.transition = '';
+      if (+el.style.zIndex >= 900) el.style.zIndex = '';
     }
 
     for (let i = 0; i < pinos.length; i++) {
@@ -275,6 +353,54 @@ export function criarTabuleiro(raiz, aoTocar = {}) {
         for (const el of novas) el.classList.remove('novo');
       });
     }
+
+    if (voando.length > 0) dispararDistribuicao(voando);
+  }
+
+  /**
+   * Larga as cartas do monte, uma depois da outra.
+   *
+   * O `offsetHeight` no meio nao e supersticao: sem ele o navegador junta a
+   * posicao inicial e a final no mesmo calculo de estilo e a carta aparece
+   * direto no destino, sem animacao nenhuma. Ler uma medida forca o desenho
+   * a acontecer ali, com a carta ainda em cima do monte.
+   *
+   * O atraso de cada carta vai na propria transicao, e nao num `setTimeout`
+   * por carta: assim o navegador cuida do compasso sozinho e nada
+   * desanda se a tela engasgar.
+   */
+  function dispararDistribuicao(voando) {
+    /** Devolve a carta ao estado comum: transicao do CSS e camada da coluna. */
+    function limpar(v) {
+      v.el.style.transition = '';
+      // So mexe na camada se ainda for a do voo: um redesenho no meio do
+      // caminho pode ja ter dado outra a ela.
+      if (v.el.style.zIndex === String(900 + v.ordem)) v.el.style.zIndex = v.zFinal;
+    }
+
+    void tabuleiro.offsetHeight;
+
+    requestAnimationFrame(() => {
+      for (const v of voando) {
+        v.el.classList.remove('repartindo');
+        v.el.style.transition =
+          'transform ' + MS_VIAGEM + 'ms ease-out ' + (v.ordem * MS_ENTRE) + 'ms';
+        v.el.style.transform = v.lugar;
+      }
+
+      // Terminado o percurso, some com os rastros: a transicao volta a ser a
+      // do CSS e a carta volta para a camada da coluna dela.
+      //
+      // Cada carta se limpa ao pousar (`transitionend`), que e o momento
+      // exato. O temporizador e a rede de seguranca: se a tela ficar
+      // escondida no meio do percurso, o navegador segura a animacao e o
+      // evento nunca chega.
+      for (const v of voando) {
+        v.el.addEventListener('transitionend', () => limpar(v), { once: true });
+      }
+      const total = MS_VIAGEM + (voando.length - 1) * MS_ENTRE + 60;
+      setTimeout(() => { for (const v of voando) limpar(v); }, total);
+    });
   }
 
   /* ---------------- destaques pedidos de fora ---------------- */

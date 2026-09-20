@@ -373,6 +373,11 @@ html, body {
 /* Carta recem-criada nao anima: numa partida nova as 54 sairiam voando. */
 .carta.novo { transition: none; }
 
+/* Carta parada em cima do monte, esperando a vez de ser distribuida. O
+   percurso e o compasso sao dados em JavaScript (`dispararDistribuicao`),
+   porque o atraso de cada uma depende da coluna. */
+.carta.repartindo { transition: none; }
+
 /* Durante o arrasto a carta acompanha o dedo sem atraso nenhum. */
 .carta.arrastando {
   transition: none;

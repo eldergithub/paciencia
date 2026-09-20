@@ -123,10 +123,14 @@ const tabuleiro = criarTabuleiro(raiz, {
   },
 
   monte() {
+    // Quem sai do monte sao as ultimas da pilha, uma por coluna. Anotar os
+    // ids antes da jogada e o que permite ao desenho faze-las voarem do
+    // monte ate a coluna, em vez de aparecerem prontas no lugar.
+    const aRepartir = new Set(estado.monte.slice(-R.COLUNAS).map((c) => c.id));
     const reg = distribuir(estado);
     if (reg) {
       aposJogada(reg);
-      tabuleiro.desenhar(estado);
+      tabuleiro.desenhar(estado, { repartidas: aRepartir });
       return;
     }
     // A regra do Spider não deixa distribuir com coluna vazia. Em vez de
