@@ -18,12 +18,14 @@ export const ESPACO = 6;
 export const PROPORCAO = 1.4;
 
 /**
- * Quantas cartas do topo ficam com o recuo grande.
+ * Diferença mínima de exposição entre carta do bloco móvel e carta
+ * embaralhada, depois de toda a compressão.
  *
- * São as jogáveis. A compressão de coluna alta sacrifica as soterradas
- * primeiro e só mexe nestas em último caso.
+ * É o que mantém visível a fronteira da sequência numa coluna alta. Sem esta
+ * folga, a compressão pode aproximar os dois recuos até a quebra sumir — e
+ * aí não dá mais para ver, de longe, onde a sequência montada começa.
  */
-export const CARTAS_NO_TOPO = 5;
+export const FOLGA_FRONTEIRA = 6;
 
 /**
  * Medidas do tabuleiro para uma área útil de largura × altura.
@@ -190,7 +192,15 @@ export function colunaMaisProxima(x, medidas, aceita) {
  * que encolhe primeiro.
  *   1. cartas viradas para baixo  (não há nada para ler nelas)
  *   2. viradas para cima soterradas
- *   3. as 5 do topo, que são as jogáveis - só em último caso
+ *   3. as do bloco móvel, que são as jogáveis - só em último caso
+ *
+ * O recuo grande acompanha o bloco móvel de verdade (`inicioDoBloco`), e não
+ * um número fixo de cartas do topo. Número fixo desenha uma quebra de
+ * exposição no meio de uma sequência montada de 8 cartas, e essa quebra não
+ * quer dizer nada na regra: quem olha a coluna lê ali o começo da sequência
+ * e conta menos cartas do que tem. Do jeito certo, a quebra de exposição cai
+ * exatamente onde o papel também muda de cor, e os dois sinais dizem a mesma
+ * coisa.
  *
  * Devolve { ys, alturaTotal }.
  */
@@ -202,11 +212,13 @@ export function calcularRecuos(coluna, alturaDisponivel, medidas) {
   let soterrada = medidas.recuoSoterrada;
   let noTopo = medidas.recuoNoTopo;
 
-  // Que tipo de recuo cada carta recebe, olhando a carta de cima dela.
+  // `tipos[j]` é o vão abaixo da carta j: o quanto dela fica à mostra antes
+  // de a seguinte cobri-la. A última carta não entra, porque aparece inteira.
+  const inicio = R.inicioDoBloco(coluna);
   const tipos = new Array(n - 1);
-  for (let i = 1; i < n; i++) {
-    if (!coluna[i - 1].up) tipos[i - 1] = 0;                        // virada para baixo
-    else tipos[i - 1] = i >= n - CARTAS_NO_TOPO ? 2 : 1;            // topo : soterrada
+  for (let j = 0; j < n - 1; j++) {
+    if (!coluna[j].up) tipos[j] = 0;                                // virada para baixo
+    else tipos[j] = inicio >= 0 && j >= inicio ? 2 : 1;             // bloco móvel : soterrada
   }
 
   const soma = () => {
@@ -230,6 +242,12 @@ export function calcularRecuos(coluna, alturaDisponivel, medidas) {
     if (soterrada > 4) soterrada -= 0.5;
     if (noTopo > 10) noTopo -= 0.5;
   }
+
+  // Aperto final que garante a hierarquia virada para baixo < soterrada <
+  // bloco. Só encolhe recuo, nunca aumenta, então não há como estourar a
+  // altura que os laços acima acabaram de acertar.
+  soterrada = Math.max(3, Math.min(soterrada, noTopo - FOLGA_FRONTEIRA));
+  paraBaixo = Math.max(2, Math.min(paraBaixo, soterrada));
 
   const ys = new Array(n);
   ys[0] = 0;

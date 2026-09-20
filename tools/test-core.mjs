@@ -527,7 +527,7 @@ grupo('Tabuleiro em texto');
 grupo('Layout do tabuleiro (Fase 3)');
 
 {
-  const { calcularMedidas, calcularRecuos, alturaVisivel, xDaColuna, CARTAS_NO_TOPO } =
+  const { calcularMedidas, calcularRecuos, alturaVisivel, xDaColuna, FOLGA_FRONTEIRA } =
     await import('../src/ui/layout.js');
 
   // Area util de um 6,5" deitado, ja descontadas as margens de seguranca.
@@ -573,7 +573,68 @@ grupo('Layout do tabuleiro (Fase 3)');
     recuoNoTopo + ' contra ' + recuoSoterrada + ')');
   ok(recuoNoTopo >= m.minNoTopo,
     'o recuo do topo nunca cai abaixo do piso de legibilidade');
-  igual(CARTAS_NO_TOPO, 5, 'a zona de acao tem 5 cartas');
+  /* ---- A zona de acao e o bloco movel, nao um numero fixo de cartas ----
+     Defeito real relatado por quem joga: com um numero fixo de 5, uma
+     sequencia montada de 8 cartas saia com as 3 de cima espremidas na
+     exposicao de soterrada. A quebra de exposicao caia no meio da sequencia,
+     nao tem significado nenhum na regra, e quem olhava a coluna contava
+     menos cartas do que tinha. Agora a exposicao grande acompanha o bloco
+     que realmente move junto. */
+  {
+    /** Coluna com N cobertas, N embaralhadas e um bloco movel de N cartas. */
+    function colunaComBloco(viradas, soltas, bloco) {
+      const coluna = [];
+      for (let i = 0; i < viradas; i++) coluna.push(carta(7, 0, false));
+      // Valores que nao encadeiam, para nao entrarem no bloco sem querer.
+      for (let i = 0; i < soltas; i++) coluna.push(carta(2 + (i * 5) % 11, i % 4, true));
+      for (let i = 0; i < bloco; i++) coluna.push(carta(13 - i, 2, true));
+      return coluna;
+    }
+
+    const coluna = colunaComBloco(5, 0, 8);
+    const inicio = R.inicioDoBloco(coluna);
+    igual(inicio, 5, 'o bloco de 8 cartas comeca onde as viradas terminam');
+
+    const { ys } = calcularRecuos(coluna, m.alturaColuna, m);
+    const exposicoes = [];
+    // A ultima carta aparece inteira, entao nao entra na comparacao de recuo.
+    for (let i = inicio; i < coluna.length - 1; i++) exposicoes.push(alturaVisivel(ys, i, m));
+    igual(new Set(exposicoes).size, 1,
+      'as 8 cartas da sequencia saem todas com a mesma exposicao (' + exposicoes[0] + 'px)');
+
+    // Mesma sequencia, agora com cartas embaralhadas acima dela.
+    const mista = colunaComBloco(4, 4, 8);
+    const inicioMista = R.inicioDoBloco(mista);
+    const rMista = calcularRecuos(mista, m.alturaColuna, m);
+    const noBloco = alturaVisivel(rMista.ys, inicioMista, m);
+    const embaralhada = alturaVisivel(rMista.ys, inicioMista - 1, m);
+    const coberta = alturaVisivel(rMista.ys, 0, m);
+    ok(noBloco - embaralhada >= FOLGA_FRONTEIRA,
+      'a fronteira da sequencia sobrevive a compressao (' + noBloco + ' contra ' +
+      embaralhada + ', folga minima de ' + FOLGA_FRONTEIRA + ')');
+    ok(embaralhada >= coberta,
+      'carta embaralhada nunca aparece menos que carta virada para baixo');
+
+    // O espelho do mesmo defeito: com numero fixo, cartas embaralhadas logo
+    // acima do topo ganhavam exposicao grande e simulavam um bloco que nao
+    // existia. Exposicao grande agora quer dizer uma coisa so.
+    const curta = colunaComBloco(4, 5, 1);
+    const rCurta = calcularRecuos(curta, m.alturaColuna, m);
+    const acimaDoTopo = alturaVisivel(rCurta.ys, curta.length - 2, m);
+    ok(acimaDoTopo < m.recuoNoTopo,
+      'carta embaralhada fora do bloco nao recebe exposicao de carta jogavel');
+
+    // Pior caso possivel: sequencia completa de 13 numa coluna de 32.
+    const extrema = colunaComBloco(19, 0, 13);
+    const rExtrema = calcularRecuos(extrema, m.alturaColuna, m);
+    ok(rExtrema.alturaTotal <= m.alturaColuna,
+      'coluna de 32 com sequencia completa de 13 ainda cabe na altura (' +
+      Math.round(rExtrema.alturaTotal) + ' de ' + m.alturaColuna + ')');
+    const exposicoesExtremas = [];
+    for (let i = 19; i < extrema.length - 1; i++) exposicoesExtremas.push(alturaVisivel(rExtrema.ys, i, m));
+    igual(new Set(exposicoesExtremas).size, 1,
+      'mesmo espremida ate o limite, a sequencia de 13 nao ganha quebra no meio');
+  }
 
   // Coluna vazia e coluna de uma carta nao podem quebrar a conta.
   igual(calcularRecuos([], m.alturaColuna, m).ys, [], 'coluna vazia nao gera posicoes');
