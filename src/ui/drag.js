@@ -26,7 +26,7 @@ const ACIMA_DO_DEDO = 30;
 /** Quanto tempo o destaque de "essas aqui podem mover" fica aceso. */
 const MS_DESTAQUE = 700;
 
-export function ligarInteracao({ elemento, estado, medidas, redesenhar, mover }) {
+export function ligarInteracao({ elemento, estado, medidas, redesenhar, mover, bloqueado }) {
   let arrasto = null;
 
   function posicaoLocal(evento) {
@@ -81,13 +81,14 @@ export function ligarInteracao({ elemento, estado, medidas, redesenhar, mover })
    */
   function executar(de, para, quantas) {
     const ok = mover(de, para, quantas);
-    redesenhar();
+    if (!ok) redesenhar();
     return ok;
   }
 
   /* ---------------- ponteiro ---------------- */
 
   function aoApertar(evento) {
+    if (bloqueado && bloqueado()) return;
     if (arrasto) return;
     if (evento.button !== undefined && evento.button !== 0) return;
 
@@ -130,6 +131,7 @@ export function ligarInteracao({ elemento, estado, medidas, redesenhar, mover })
   }
 
   function aoMover(evento) {
+    if (bloqueado && bloqueado()) return;
     if (!arrasto || evento.pointerId !== arrasto.ponteiro) return;
     const local = posicaoLocal(evento);
     const dx = local.x - arrasto.origemX;
@@ -155,6 +157,7 @@ export function ligarInteracao({ elemento, estado, medidas, redesenhar, mover })
   }
 
   function aoSoltar(evento) {
+    if (bloqueado && bloqueado()) return;
     if (!arrasto || evento.pointerId !== arrasto.ponteiro) return;
     const atual = arrasto;
     arrasto = null;
@@ -199,6 +202,7 @@ export function ligarInteracao({ elemento, estado, medidas, redesenhar, mover })
   }
 
   function aoCancelar(evento) {
+    if (bloqueado && bloqueado()) return;
     if (!arrasto || evento.pointerId !== arrasto.ponteiro) return;
     const atual = arrasto;
     arrasto = null;

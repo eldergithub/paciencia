@@ -10,6 +10,7 @@
 import * as R from '../core/rules.js';
 import { SIMBOLO_NAIPE, NAIPE_VERMELHO, ROTULO_VALOR, TOTAL_SEQUENCIAS } from '../core/deck.js';
 import { calcularMedidas, calcularRecuos, alturaVisivel, xDaColuna, calcularTrilho } from './layout.js';
+import { vibrarSequencia } from '../storage.js';
 
 const ICONES = {
   voltar: '<path d="M4 8h11a5 5 0 0 1 0 10H8"/><path d="M8 4 4 8l4 4"/>',
@@ -86,6 +87,8 @@ export function criarTabuleiro(raiz, aoTocar = {}) {
   }
 
   const acoes = elemento('div', 'acoes', trilho);
+  let bloqueadoInteracao = false;
+
   function criarAcao(nome, rotulo, pai, classe) {
     const botao = elemento('button', 'acao' + (classe ? ' ' + classe : ''), pai);
     botao.type = 'button';
@@ -93,7 +96,12 @@ export function criarTabuleiro(raiz, aoTocar = {}) {
     disco.innerHTML = icone(nome, 'icone');
     const texto = elemento('span', 'rotulo', botao);
     texto.textContent = rotulo;
-    if (aoTocar[nome]) botao.addEventListener('click', aoTocar[nome]);
+    if (aoTocar[nome]) {
+      botao.addEventListener('click', (e) => {
+        if (bloqueadoInteracao) return;
+        aoTocar[nome](e);
+      });
+    }
     return botao;
   }
 
@@ -104,7 +112,12 @@ export function criarTabuleiro(raiz, aoTocar = {}) {
   const monte = elemento('button', 'monte', trilho);
   monte.type = 'button';
   monte.setAttribute('aria-label', 'Distribuir cartas do monte');
-  if (aoTocar.monte) monte.addEventListener('click', aoTocar.monte);
+  if (aoTocar.monte) {
+    monte.addEventListener('click', (e) => {
+      if (bloqueadoInteracao) return;
+      aoTocar.monte(e);
+    });
+  }
 
   const rodape = elemento('div', 'rodape', trilho);
   criarAcao('sair', 'SAIR', rodape, 'sair');
@@ -112,7 +125,12 @@ export function criarTabuleiro(raiz, aoTocar = {}) {
   ajustes.type = 'button';
   ajustes.innerHTML = icone('ajustes', 'icone');
   ajustes.setAttribute('aria-label', 'Ajustes');
-  if (aoTocar.ajustes) ajustes.addEventListener('click', aoTocar.ajustes);
+  if (aoTocar.ajustes) {
+    ajustes.addEventListener('click', (e) => {
+      if (bloqueadoInteracao) return;
+      aoTocar.ajustes(e);
+    });
+  }
 
   /* ---------------- colunas vazias ---------------- */
 
@@ -216,6 +234,8 @@ export function criarTabuleiro(raiz, aoTocar = {}) {
    * `opcoes.repartidas` e o conjunto de ids das cartas que acabaram de sair
    * do monte. Elas nascem em cima do monte e viajam ate a coluna, uma depois
    * da outra, em vez de simplesmente aparecerem no lugar.
+   * `opcoes.completadasPendentes` mantem as 13 cartas visiveis na coluna
+   * para aguardar a animacao de voo ate o pino.
    */
   function desenhar(estado, opcoes = {}) {
     const m = medir();
@@ -229,8 +249,31 @@ export function criarTabuleiro(raiz, aoTocar = {}) {
     const origem = repartidas ? origemDoMonte() : null;
     const voando = [];
 
+    // Mapeia sequencias completadas pendentes de animacao por coluna
+    const completadasPorColuna = new Map();
+    if (opcoes.completadasPendentes) {
+      for (const comp of opcoes.completadasPendentes) {
+        completadasPorColuna.set(comp.coluna, comp);
+      }
+    }
+
     for (let c = 0; c < R.COLUNAS; c++) {
-      const coluna = estado.mesa[c];
+      let coluna = estado.mesa[c];
+      const comp = completadasPorColuna.get(c);
+
+      if (comp) {
+        // Se a coluna teve uma sequencia recolhida que ainda vai animar,
+        // desenhamos a coluna completa com as 13 cartas em cima.
+        // Se comp.virou, a carta base imediatamente abaixo estava coberta (virada para baixo).
+        if (comp.virou && coluna.length > 0) {
+          const base = coluna.slice(0, -1);
+          const cartaCoberta = { ...coluna[coluna.length - 1], up: false };
+          coluna = [...base, cartaCoberta, ...comp.cartas];
+        } else {
+          coluna = [...coluna, ...comp.cartas];
+        }
+      }
+
       const x = xDaColuna(m, c);
 
       const marca = marcasVazias[c];
@@ -268,17 +311,6 @@ export function criarTabuleiro(raiz, aoTocar = {}) {
           voando.push({ el, lugar, zFinal: String(i + 1), ordem: c });
         } else {
           // Limpeza defensiva de um voo que ficou pela metade.
-          //
-          // Duas coisas ficam grudadas na carta enquanto ela viaja do monte:
-          // a transicao com atraso, e a classe `repartindo`. Se a tela for
-          // redesenhada no meio do percurso - e ela e, a cada jogada e a cada
-          // giro de tela - as duas precisam sair aqui.
-          //
-          // O atraso esquecido faria a proxima jogada dessa carta responder
-          // com ate 0,4 s de espera. A classe esquecida e pior: ela zera a
-          // transicao, e a carta passaria a teleportar em vez de deslizar,
-          // para sempre. As duas coisas doem exatamente no que este jogo
-          // promete - que nenhum toque dela fique sem resposta visivel.
           if (el.style.transition) el.style.transition = '';
           el.classList.remove('repartindo');
           el.style.transform = lugar;
@@ -329,17 +361,14 @@ export function criarTabuleiro(raiz, aoTocar = {}) {
       el.hidden = true;
       delete el.dataset.coluna;
       delete el.dataset.indice;
-      // Uma carta pode sair da mesa no meio do voo do monte - e o que
-      // acontece quando ela desfaz a distribuicao logo depois de fazer, ou
-      // quando a distribuicao fecha uma sequencia. Os restos do voo saem
-      // junto: senao a carta volta do monte, mais tarde, sem saber deslizar.
       el.classList.remove('repartindo');
       if (el.style.transition) el.style.transition = '';
       if (+el.style.zIndex >= 900) el.style.zIndex = '';
     }
 
+    const pinosAtivos = estado.completas - (opcoes.completadasPendentes ? opcoes.completadasPendentes.length : 0);
     for (let i = 0; i < pinos.length; i++) {
-      pinos[i].classList.toggle('cheio', i < estado.completas);
+      pinos[i].classList.toggle('cheio', i < pinosAtivos);
     }
     botaoVoltar.disabled = estado.historico.length === 0;
     desenharMonte(estado, m.altura);
@@ -403,6 +432,151 @@ export function criarTabuleiro(raiz, aoTocar = {}) {
     });
   }
 
+  /**
+   * Executa a transicao visual e comemoracao de sequencias completadas:
+   * 1. Aguarda as cartas pousarem na coluna de destino
+   * 2. Destaca as 13 cartas com brilho dourado e exibe aviso flutuante
+   * 3. Dispara vibracao tatil
+   * 4. Faz as 13 cartas voarem suavemente ate o pino superior esquerdo
+   * 5. Acende e pulsa o pino na chegada
+   * 6. Revela a carta de baixo se houver virado
+   */
+  async function animarSequenciaCompletada({ completadas, estado, aoConcluir, atrasoInicial = 220 }) {
+    if (!completadas || completadas.length === 0) {
+      if (aoConcluir) aoConcluir();
+      return;
+    }
+
+    bloqueadoInteracao = true;
+    botaoVoltar.disabled = true;
+
+    // Aguarda o termino da transicao de movimento da jogada
+    if (atrasoInicial > 0) {
+      await new Promise((r) => setTimeout(r, atrasoInicial));
+    }
+
+    let indicePino = estado.completas - completadas.length;
+
+    for (let cIdx = 0; cIdx < completadas.length; cIdx++) {
+      const comp = completadas[cIdx];
+      const colunaIndice = comp.coluna;
+      const m = medidas;
+      const x = xDaColuna(m, colunaIndice);
+
+      // Elementos das 13 cartas
+      const elementosCartas = comp.cartas.map((c) => elementoDaCarta(c));
+
+      // Destaque dourado comemorativo nas 13 cartas
+      for (const el of elementosCartas) {
+        el.classList.add('sequencia-completa');
+      }
+
+      const naipe = comp.cartas[0].n;
+      const simboloNaipe = SIMBOLO_NAIPE[naipe];
+      const ehVermelho = NAIPE_VERMELHO[naipe];
+
+      // Aviso flutuante sobre a coluna
+      const aviso = elemento('div', 'aviso-sequencia', tabuleiro);
+      const iconeEstrela = elemento('span', 'aviso-icone', aviso);
+      iconeEstrela.textContent = '✨';
+      const textoAviso = elemento('span', 'aviso-texto', aviso);
+      textoAviso.textContent = 'Sequência Completa!';
+      const naipeAviso = elemento('span', 'aviso-naipe ' + (ehVermelho ? 'vermelho' : 'preto'), aviso);
+      naipeAviso.textContent = simboloNaipe;
+
+      aviso.style.left = (x + m.w / 2) + 'px';
+      const yTopo = parseFloat(elementosCartas[0]?.dataset.y || '10');
+      aviso.style.top = Math.max(10, yTopo - 44) + 'px';
+
+      vibrarSequencia();
+
+      if (menosMovimento.matches) {
+        await new Promise((r) => setTimeout(r, 450));
+        aviso.classList.add('saindo');
+        for (const el of elementosCartas) {
+          el.style.transition = 'opacity 250ms ease-out';
+          el.style.opacity = '0';
+        }
+        await new Promise((r) => setTimeout(r, 260));
+      } else {
+        // Pausa para a usuaria ver e reconhecer a sequencia formada
+        await new Promise((r) => setTimeout(r, 480));
+
+        aviso.classList.add('saindo');
+
+        const pinoAlvo = pinos[indicePino] || pinos[0];
+        const dp = pinoAlvo.getBoundingClientRect();
+        const dt = tabuleiro.getBoundingClientRect();
+        const targetX = dp.left - dt.left;
+        const targetY = dp.top - dt.top;
+        const targetH = dp.height;
+        const escala = Math.max(0.18, targetH / m.h);
+
+        const msVoo = 520;
+        const msStagger = 14;
+
+        for (let k = 0; k < elementosCartas.length; k++) {
+          const el = elementosCartas[k];
+          el.classList.remove('sequencia-completa');
+          el.style.transformOrigin = '0 0';
+          el.style.zIndex = String(1500 + k);
+          const atraso = (elementosCartas.length - 1 - k) * msStagger; // Ás primeiro ate o Rei
+          el.style.transition =
+            'transform ' + msVoo + 'ms cubic-bezier(0.22, 1, 0.36, 1) ' + atraso + 'ms, ' +
+            'opacity ' + (msVoo - 60) + 'ms ease-in ' + atraso + 'ms';
+          el.style.transform = 'translate(' + targetX + 'px, ' + targetY + 'px) scale(' + escala + ')';
+          el.style.opacity = '0.05';
+        }
+
+        const tempoTotal = msVoo + elementosCartas.length * msStagger + 60;
+        await new Promise((r) => setTimeout(r, tempoTotal));
+      }
+
+      // Chegada ao pino: acende e pulsa
+      const pinoAlvo = pinos[indicePino];
+      if (pinoAlvo) {
+        pinoAlvo.classList.add('cheio');
+        pinoAlvo.classList.add('acendendo');
+        setTimeout(() => pinoAlvo.classList.remove('acendendo'), 650);
+      }
+      indicePino++;
+
+      aviso.remove();
+
+      // Esconde e reseta os estilos inline das 13 cartas
+      for (const el of elementosCartas) {
+        el.hidden = true;
+        el.classList.remove('sequencia-completa');
+        el.style.transformOrigin = '';
+        el.style.transition = '';
+        el.style.transform = '';
+        el.style.opacity = '';
+        el.style.zIndex = '';
+        delete el.dataset.coluna;
+        delete el.dataset.indice;
+      }
+
+      // Se virou carta embaixo, anima a revelacao
+      if (comp.virou) {
+        const colunaBase = estado.mesa[colunaIndice];
+        if (colunaBase.length > 0) {
+          const cartaTopo = colunaBase[colunaBase.length - 1];
+          const elTopo = elementoDaCarta(cartaTopo);
+          elTopo.classList.add('revelando');
+          setTimeout(() => elTopo.classList.remove('revelando'), 500);
+        }
+      }
+    }
+
+    // Desenha o estado final limpo
+    desenhar(estado);
+
+    bloqueadoInteracao = false;
+    botaoVoltar.disabled = estado.historico.length === 0;
+
+    if (aoConcluir) aoConcluir();
+  }
+
   /* ---------------- destaques pedidos de fora ---------------- */
 
   function cartasDaColuna(c) {
@@ -456,6 +630,8 @@ export function criarTabuleiro(raiz, aoTocar = {}) {
 
   return {
     desenhar,
+    animarSequenciaCompletada,
+    bloqueado: () => bloqueadoInteracao,
     medidas: () => medidas,
     tabuleiro,
     trilho,

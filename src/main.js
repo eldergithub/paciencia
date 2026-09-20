@@ -61,11 +61,11 @@ function partidaEmAndamento() {
   return estado !== null && estado.historico.length > 0;
 }
 
-function aposJogada(registro) {
+function aposJogada(registro, opcoes = {}) {
   if (!registro) return;
   salvarPartida(estado);
 
-  if (registro.completadas && registro.completadas.length > 0) {
+  if (!opcoes.silenciarVibracao && registro.completadas && registro.completadas.length > 0) {
     vibrarSequencia();
   }
 
@@ -114,6 +114,7 @@ async function confirmarSaida() {
 
 const tabuleiro = criarTabuleiro(raiz, {
   voltar() {
+    if (tabuleiro.bloqueado()) return;
     const reg = desfazer(estado);
     if (reg) {
       salvarPartida(estado);
@@ -122,14 +123,28 @@ const tabuleiro = criarTabuleiro(raiz, {
   },
 
   monte() {
+    if (tabuleiro.bloqueado()) return;
     // Quem sai do monte sao as ultimas da pilha, uma por coluna. Anotar os
     // ids antes da jogada e o que permite ao desenho faze-las voarem do
     // monte ate a coluna, em vez de aparecerem prontas no lugar.
     const aRepartir = new Set(estado.monte.slice(-R.COLUNAS).map((c) => c.id));
     const reg = distribuir(estado);
     if (reg) {
-      aposJogada(reg);
-      tabuleiro.desenhar(estado, { repartidas: aRepartir });
+      if (reg.completadas && reg.completadas.length > 0) {
+        tabuleiro.desenhar(estado, {
+          repartidas: aRepartir,
+          completadasPendentes: reg.completadas,
+        });
+        tabuleiro.animarSequenciaCompletada({
+          completadas: reg.completadas,
+          estado,
+          atrasoInicial: 720,
+          aoConcluir: () => aposJogada(reg, { silenciarVibracao: true }),
+        });
+      } else {
+        aposJogada(reg);
+        tabuleiro.desenhar(estado, { repartidas: aRepartir });
+      }
       return;
     }
     // A regra do Spider não deixa distribuir com coluna vazia. Em vez de
@@ -196,11 +211,23 @@ ligarInteracao({
   elemento: tabuleiro.tabuleiro,
   estado: () => estado,
   medidas: () => tabuleiro.medidas(),
+  bloqueado: () => tabuleiro.bloqueado(),
   redesenhar: () => tabuleiro.desenhar(estado),
   mover: (de, para, quantas) => {
     const reg = mover(estado, de, para, quantas);
     if (reg) {
-      aposJogada(reg);
+      if (reg.completadas && reg.completadas.length > 0) {
+        tabuleiro.desenhar(estado, { completadasPendentes: reg.completadas });
+        tabuleiro.animarSequenciaCompletada({
+          completadas: reg.completadas,
+          estado,
+          atrasoInicial: 220,
+          aoConcluir: () => aposJogada(reg, { silenciarVibracao: true }),
+        });
+      } else {
+        tabuleiro.desenhar(estado);
+        aposJogada(reg);
+      }
       return true;
     }
     return false;
@@ -230,7 +257,11 @@ tabuleiro.desenhar(estado);
 let redesenho = 0;
 addEventListener('resize', () => {
   cancelAnimationFrame(redesenho);
-  redesenho = requestAnimationFrame(() => tabuleiro.desenhar(estado));
+  redesenho = requestAnimationFrame(() => {
+    if (!tabuleiro.bloqueado()) {
+      tabuleiro.desenhar(estado);
+    }
+  });
 });
 
 carregarSementes().then((dados) => {
