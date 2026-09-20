@@ -385,14 +385,6 @@ html, body {
   cursor: grabbing;
 }
 
-/* Coluna que aceita a carta durante o arrasto. Contorno grosso e amarelo,
-   por fora da carta, para aparecer mesmo com o dedo em cima. */
-.carta.alvo,
-.coluna-vazia.alvo {
-  outline: 4px solid var(--destaque);
-  outline-offset: 1px;
-}
-
 /* Ela tocou numa carta soterrada, que nao tem como mover: o bloco que PODE
    mover naquela coluna pisca. Nada sai do lugar, e ela aprende olhando. */
 .carta.pode-mover {

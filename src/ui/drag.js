@@ -41,28 +41,9 @@ export function ligarInteracao({ elemento, estado, medidas, redesenhar, mover })
     return [...elemento.querySelectorAll('.carta[data-coluna="' + c + '"]:not([hidden])')];
   }
 
-  /** A carta de cima da coluna, ou a marca de coluna vazia. */
-  function alvoDaColuna(c) {
-    const cartas = elementosDaColuna(c);
-    if (cartas.length > 0) {
-      return cartas.reduce((a, b) => (+a.dataset.indice > +b.dataset.indice ? a : b));
-    }
-    const vazias = elemento.querySelectorAll('.coluna-vazia');
-    return vazias[c] && !vazias[c].hidden ? vazias[c] : null;
-  }
-
   function limparDestaques() {
-    for (const el of elemento.querySelectorAll('.alvo, .pode-mover')) {
-      el.classList.remove('alvo', 'pode-mover');
-    }
-  }
-
-  function acenderDestinos(de, quantas) {
-    for (let c = 0; c < R.COLUNAS; c++) {
-      if (c === de) continue;
-      if (!R.podeMover(estado().mesa, de, c, quantas)) continue;
-      const alvo = alvoDaColuna(c);
-      if (alvo) alvo.classList.add('alvo');
+    for (const el of elemento.querySelectorAll('.pode-mover')) {
+      el.classList.remove('pode-mover');
     }
   }
 
@@ -158,8 +139,9 @@ export function ligarInteracao({ elemento, estado, medidas, redesenhar, mover })
       // Tremor de até 8 px não vira arrasto.
       if (Math.abs(dx) < LIMIAR_DE_ARRASTO && Math.abs(dy) < LIMIAR_DE_ARRASTO) return;
       arrasto.arrastando = true;
+      // Nenhuma coluna de destino acende aqui: quem quer saber para onde a
+      // carta vai pede a dica. Pegar a carta nao entrega a jogada de graca.
       for (const el of arrasto.elementos) el.classList.add('arrastando');
-      acenderDestinos(arrasto.de, arrasto.quantas);
     }
 
     for (let k = 0; k < arrasto.elementos.length; k++) {
